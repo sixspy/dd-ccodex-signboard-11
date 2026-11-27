@@ -24,9 +24,10 @@ PRODUCT_META = {
 
 def connect() -> sqlite3.Connection:
     DATA.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=15000")
     return conn
 
 
@@ -175,6 +176,16 @@ CREATE TABLE IF NOT EXISTS write_locks(
   holder TEXT NOT NULL,
   expires_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS lock_contention(
+  id INTEGER PRIMARY KEY,
+  lock_key TEXT NOT NULL,
+  screen_id INTEGER REFERENCES screens(id),
+  holder TEXT NOT NULL,
+  contender TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lock_contention_screen ON lock_contention(screen_id, id);
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY,
   actor TEXT NOT NULL,

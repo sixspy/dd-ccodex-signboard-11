@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_PARTS = {"node_modules", "__pycache__", ".pytest_cache", "tests", "scripts", ".git", "data"}
+SKIP_PARTS = {"node_modules", "__pycache__", ".pytest_cache", "tests", "scripts", ".git", "data", ".venv"}
 SKIP_NAMES = {"vue.global.prod.js", "README.md", "Dockerfile"}
 
 

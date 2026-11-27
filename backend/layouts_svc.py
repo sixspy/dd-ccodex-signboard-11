@@ -12,17 +12,32 @@ from validators import require_code, require_title
 router = APIRouter(prefix="/api/layouts", tags=["layouts"])
 
 
+def _enrich(row: dict, count: int) -> dict:
+    try:
+        slots = json.loads(row["slots_json"])
+    except json.JSONDecodeError:
+        slots = []
+    row["slots"] = slots
+    row["slot_count"] = len(slots)
+    row["publication_count"] = count
+    row["bound"] = count > 0
+    return row
+
+
 @router.get("")
 def list_layouts(authorization: str | None = Header(default=None)):
+    """布局页与发布册同源：槽位画布 + 正式发布占用数。"""
     current_user(authorization)
     with connect() as conn:
         rows = rows_to_list(conn.execute("SELECT * FROM layouts ORDER BY id").fetchall())
-    for r in rows:
-        try:
-            r["slots"] = json.loads(r["slots_json"])
-        except json.JSONDecodeError:
-            r["slots"] = []
-    return {"items": rows}
+        usage = {
+            r["layout_id"]: r["c"]
+            for r in conn.execute(
+                "SELECT layout_id, COUNT(*) c FROM publications "
+                "WHERE official=1 AND layout_id IS NOT NULL GROUP BY layout_id"
+            ).fetchall()
+        }
+    return {"items": [_enrich(r, usage.get(r["id"], 0)) for r in rows]}
 
 
 @router.post("")

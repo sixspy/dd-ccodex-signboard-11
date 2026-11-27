@@ -13,15 +13,41 @@ from validators import require_code, require_positive_int, require_title, requir
 router = APIRouter(prefix="/api/zones", tags=["zones"])
 
 
+def _enrich(row: dict) -> dict:
+    row["zone_type_label"] = ZONE_TYPE_LABEL.get(row["zone_type"], row["zone_type"])
+    row["risk_label"] = RISK_LEVELS.get(row["risk_level"], str(row["risk_level"]))
+    return row
+
+
 @router.get("")
 def list_zones(authorization: str | None = Header(default=None)):
+    """分区页露出室外屏布局绑定缺口，避免与发布册脱节。"""
     current_user(authorization)
     with connect() as conn:
         rows = rows_to_list(conn.execute("SELECT * FROM zones ORDER BY id").fetchall())
+        gaps = {
+            r["zone_id"]: r
+            for r in conn.execute(
+                """
+                SELECT s.zone_id,
+                       SUM(CASE WHEN p.id IS NOT NULL THEN 1 ELSE 0 END) AS published,
+                       SUM(CASE WHEN p.id IS NOT NULL AND p.layout_id IS NULL THEN 1 ELSE 0 END) AS unbound
+                FROM screens s
+                LEFT JOIN publications p
+                  ON p.screen_id=s.id AND p.official=1 AND p.status='published'
+                GROUP BY s.zone_id
+                """
+            ).fetchall()
+        }
+    items = []
     for r in rows:
-        r["zone_type_label"] = ZONE_TYPE_LABEL.get(r["zone_type"], r["zone_type"])
-        r["risk_label"] = RISK_LEVELS.get(r["risk_level"], str(r["risk_level"]))
-    return {"items": rows}
+        g = gaps.get(r["id"]) or {"unbound": 0, "published": 0}
+        r = _enrich(r)
+        r["published_screens"] = g["published"]
+        r["unbound_publish_screens"] = g["unbound"]
+        r["layout_gap"] = r["zone_type"] == "outdoor" and g["unbound"] > 0
+        items.append(r)
+    return {"items": items}
 
 
 @router.post("")

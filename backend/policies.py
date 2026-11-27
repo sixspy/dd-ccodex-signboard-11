@@ -9,6 +9,12 @@ def assert_zone_risk_for_outdoor(zone_type: str, risk_level: int) -> None:
         raise HTTPException(400, "室外分区风险等级至少为 3")
 
 
+def assert_outdoor_layout_bound(zone_type: str, layout) -> None:
+    """室外屏正式上屏须绑定已有布局；缺布局整笔拒写，不得折中落半行。"""
+    if zone_type == "outdoor" and layout is None:
+        raise HTTPException(409, "室外屏正式发布须绑定已有布局（缺布局整笔拒写）")
+
+
 def assert_playlist_ready(status: str) -> None:
     if status != "ready":
         raise HTTPException(409, "仅可播清单可发布上屏")

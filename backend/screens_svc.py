@@ -5,7 +5,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 from audit_svc import write_audit, write_history
 from auth import current_user, require_writer
-from db import connect, rows_to_list
+from db import connect
 from models import SCREEN_STATUS_LABEL, ZONE_TYPE_LABEL
 from validators import require_code, require_screen_status, require_title
 
@@ -24,12 +24,18 @@ def _enrich(row: dict, zone: dict | None = None) -> dict:
 
 @router.get("")
 def list_screens(authorization: str | None = Header(default=None)):
+    """屏幕页露出正式发布布局绑定，室外缺布局直接可见。"""
     current_user(authorization)
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT s.*, z.code zone_code, z.title zone_title, z.zone_type, z.risk_level
-            FROM screens s JOIN zones z ON z.id=s.zone_id
+            SELECT s.*, z.code zone_code, z.title zone_title, z.zone_type, z.risk_level,
+                   p.id publication_id, p.layout_id, p.version publication_version,
+                   l.code layout_code, l.title layout_title
+            FROM screens s
+            JOIN zones z ON z.id=s.zone_id
+            LEFT JOIN publications p ON p.screen_id=s.id AND p.official=1 AND p.status='published'
+            LEFT JOIN layouts l ON l.id=p.layout_id
             ORDER BY s.id
             """
         ).fetchall()
@@ -38,6 +44,12 @@ def list_screens(authorization: str | None = Header(default=None)):
         d = dict(r)
         d["status_label"] = SCREEN_STATUS_LABEL.get(d["status"], d["status"])
         d["zone_type_label"] = ZONE_TYPE_LABEL.get(d["zone_type"], d["zone_type"])
+        d["layout_bound"] = d["layout_id"] is not None
+        d["layout_gap"] = (
+            d["zone_type"] == "outdoor"
+            and d["publication_id"] is not None
+            and d["layout_id"] is None
+        )
         items.append(d)
     return {"items": items}
 

@@ -4,7 +4,7 @@ window.SB_VIEWS["zones-view"] = {
   <div>
     <div class="panel">
       <h2>楼宇分区</h2>
-      <p class="lead">分区约束风险等级与可发布屏幕范围。</p>
+      <p class="lead">分区约束风险等级与可发布屏幕范围；室外分区正式发布须绑布局。</p>
       <div class="row-form">
         <input v-model="form.code" placeholder="编码" />
         <input v-model="form.title" placeholder="标题" />
@@ -22,11 +22,16 @@ window.SB_VIEWS["zones-view"] = {
     </div>
     <div class="panel">
       <table>
-        <thead><tr><th>编码</th><th>标题</th><th>类型</th><th>风险</th><th>楼层</th></tr></thead>
+        <thead><tr><th>编码</th><th>标题</th><th>类型</th><th>风险</th><th>楼层</th><th>布局绑定</th></tr></thead>
         <tbody>
           <tr v-for="z in items" :key="z.id">
             <td>{{ z.code }}</td><td>{{ z.title }}</td><td>{{ z.zone_type_label }}</td>
             <td>{{ z.risk_label }}</td><td>{{ z.floor_label || "—" }}</td>
+            <td>
+              <span class="badge bad" v-if="z.layout_gap">室外缺布局</span>
+              <span class="badge" v-else-if="z.zone_type==='outdoor'">室外已齐套</span>
+              <span v-else>—</span>
+            </td>
           </tr>
         </tbody>
       </table>

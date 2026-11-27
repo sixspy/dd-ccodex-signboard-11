@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 from audit_svc import write_audit, write_history
 from auth import current_user, require_writer
 from db import connect, rows_to_list
-from locks import acquire, release
+from locks import acquire_screen_write, release
 from validators import require_positive_int, require_title
 
 router = APIRouter(prefix="/api/panic", tags=["panic"])
@@ -52,13 +52,21 @@ def panic_official(body: dict, authorization: str | None = Header(default=None))
     require_writer(user)
     screen_id = require_positive_int(body.get("screen_id"), "屏幕编号")
     reason = require_title(body.get("reason") or "紧急撤屏", "原因")
-    lock_key = f"publish:{screen_id}"
-    acquire(lock_key, user["username"])
+    with connect() as conn:
+        screen = conn.execute(
+            """
+            SELECT s.*, z.zone_type zone_type
+            FROM screens s JOIN zones z ON z.id=s.zone_id WHERE s.id=?
+            """,
+            (screen_id,),
+        ).fetchone()
+        if not screen:
+            raise HTTPException(404, "屏幕不存在")
+    lock_key = acquire_screen_write(
+        screen_id, screen["zone_type"], user["username"], "panic_official"
+    )
     try:
         with connect() as conn:
-            screen = conn.execute("SELECT * FROM screens WHERE id=?", (screen_id,)).fetchone()
-            if not screen:
-                raise HTTPException(404, "屏幕不存在")
             conn.execute(
                 "UPDATE publications SET status='rolled_back' WHERE screen_id=? AND official=1",
                 (screen_id,),
@@ -112,8 +120,15 @@ def promote_panic(shadow_id: int, authorization: str | None = Header(default=Non
             raise HTTPException(409, "影子不可升正")
         screen_id = sh["screen_id"]
         reason = sh["reason"]
-    lock_key = f"publish:{screen_id}"
-    acquire(lock_key, user["username"])
+        zone = conn.execute(
+            "SELECT z.zone_type zone_type FROM screens s JOIN zones z ON z.id=s.zone_id WHERE s.id=?",
+            (screen_id,),
+        ).fetchone()
+        if not zone:
+            raise HTTPException(404, "屏幕不存在")
+    lock_key = acquire_screen_write(
+        screen_id, zone["zone_type"], user["username"], "panic_promote_shadow"
+    )
     try:
         with connect() as conn:
             conn.execute("DELETE FROM publications WHERE screen_id=? AND official=1", (screen_id,))

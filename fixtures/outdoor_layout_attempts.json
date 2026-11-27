@@ -1,0 +1,17 @@
+[
+  {
+    "case": "室外屏无布局发布尝试",
+    "screen_code": "scr_yard_e1",
+    "zone_code": "yard_east",
+    "zone_type": "outdoor",
+    "playlist_code": "pl_lift_loop",
+    "window_code": "win_workday",
+    "layout_code": null,
+    "expect": {
+      "official_rows_delta": 0,
+      "shadow_allowed": true,
+      "promote_allowed": false,
+      "board_ready": false
+    }
+  }
+]
